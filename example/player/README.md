@@ -10,12 +10,12 @@ This example demonstrates `protoc-gen-fieldops` with a `PlayerService`.
 buf generate
 ```
 
-2. In your server setup, call `RegisterFilteredReflection` instead of `reflection.Register`:
+2. In your server setup, call `fieldops.Register` instead of `reflection.Register`:
 
 ```go
-import playerv1 "github.com/lfreixial/proto-opscope/example/player/gen"
+import fieldops "github.com/lfreixial/proto-opscope/pkg/fieldops"
 
-playerv1.RegisterFilteredReflection(grpcServer)
+fieldops.Register(grpcServer)
 ```
 
 ## What clients see

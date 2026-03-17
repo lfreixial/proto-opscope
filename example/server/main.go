@@ -6,6 +6,7 @@ import (
 "net"
 
 "google.golang.org/grpc"
+fieldops "github.com/lfreixial/proto-opscope/pkg/fieldops"
 playerv1 "github.com/lfreixial/proto-opscope/gen/example/player/v1"
 )
 
@@ -33,7 +34,8 @@ s := grpc.NewServer()
 playerv1.RegisterPlayerServiceServer(s, &playerServer{})
 
 // *** The only change from standard gRPC setup ***
-playerv1.RegisterFilteredReflection(s)
+// Descriptors are auto-registered via init() in generated _fieldops.pb.go files.
+fieldops.Register(s)
 
 log.Println("gRPC server with filtered reflection listening on :50051")
 if err := s.Serve(lis); err != nil {

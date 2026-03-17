@@ -16,24 +16,56 @@ import (
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 )
 
+var (
+	registryMu sync.Mutex
+	registry   [][]byte
+)
+
+// AddDescriptor registers a filtered file descriptor. Called from generated init() functions.
+func AddDescriptor(desc []byte) {
+	registryMu.Lock()
+	registry = append(registry, desc)
+	registryMu.Unlock()
+}
+
+// Register creates a filtered reflection server using all descriptors added via
+// AddDescriptor and registers both v1 and v1alpha reflection services.
+func Register(s *grpc.Server) {
+	registryMu.Lock()
+	raw := make([][]byte, len(registry))
+	copy(raw, registry)
+	registryMu.Unlock()
+
+	srv := &filteredServer{rawDescs: raw}
+	rpbv1.RegisterServerReflectionServer(s, &v1Adapter{srv})
+	rpbv1alpha.RegisterServerReflectionServer(s, &v1alphaAdapter{srv})
+}
+
 type filteredServer struct {
-	filteredDescBytes []byte
-	once              sync.Once
-	filteredFD        *descriptorpb.FileDescriptorProto
-	filteredSymbols   map[string]bool
-	filename          string
-	initErr           error
+	rawDescs     [][]byte
+	once         sync.Once
+	initErr      error
+	files        []*descriptorpb.FileDescriptorProto
+	symbolToFile map[string]*descriptorpb.FileDescriptorProto
+	nameToFile   map[string]*descriptorpb.FileDescriptorProto
 }
 
 func (s *filteredServer) init() {
 	s.once.Do(func() {
-		s.filteredFD = &descriptorpb.FileDescriptorProto{}
-		if err := proto.Unmarshal(s.filteredDescBytes, s.filteredFD); err != nil {
-			s.initErr = err
-			return
+		s.symbolToFile = make(map[string]*descriptorpb.FileDescriptorProto)
+		s.nameToFile = make(map[string]*descriptorpb.FileDescriptorProto)
+		for _, raw := range s.rawDescs {
+			fd := &descriptorpb.FileDescriptorProto{}
+			if err := proto.Unmarshal(raw, fd); err != nil {
+				s.initErr = err
+				return
+			}
+			s.files = append(s.files, fd)
+			s.nameToFile[fd.GetName()] = fd
+			for sym := range buildSymbolMap(fd) {
+				s.symbolToFile[sym] = fd
+			}
 		}
-		s.filename = s.filteredFD.GetName()
-		s.filteredSymbols = buildSymbolMap(s.filteredFD)
 	})
 }
 
@@ -50,16 +82,6 @@ func buildSymbolMap(fd *descriptorpb.FileDescriptorProto) map[string]bool {
 		}
 	}
 	return m
-}
-
-// Register creates a filtered reflection server and registers both v1 and v1alpha
-// reflection services on the given gRPC server.
-func Register(s *grpc.Server, filteredDescBytes []byte) {
-	srv := &filteredServer{filteredDescBytes: filteredDescBytes}
-	v1adapter := &v1Adapter{srv}
-	v1alphaadapter := &v1alphaAdapter{srv}
-	rpbv1.RegisterServerReflectionServer(s, v1adapter)
-	rpbv1alpha.RegisterServerReflectionServer(s, v1alphaadapter)
 }
 
 type v1Adapter struct{ srv *filteredServer }
@@ -176,10 +198,12 @@ func (s *filteredServer) handleRequest(req *rpbv1.ServerReflectionRequest) *rpbv
 
 	switch v := req.MessageRequest.(type) {
 	case *rpbv1.ServerReflectionRequest_ListServices:
-		svcs := make([]*rpbv1.ServiceResponse, 0, len(s.filteredFD.GetService()))
-		pkg := s.filteredFD.GetPackage()
-		for _, svc := range s.filteredFD.GetService() {
-			svcs = append(svcs, &rpbv1.ServiceResponse{Name: pkg + "." + svc.GetName()})
+		var svcs []*rpbv1.ServiceResponse
+		for _, fd := range s.files {
+			pkg := fd.GetPackage()
+			for _, svc := range fd.GetService() {
+				svcs = append(svcs, &rpbv1.ServiceResponse{Name: pkg + "." + svc.GetName()})
+			}
 		}
 		return &rpbv1.ServerReflectionResponse{
 			MessageResponse: &rpbv1.ServerReflectionResponse_ListServicesResponse{
@@ -189,18 +213,18 @@ func (s *filteredServer) handleRequest(req *rpbv1.ServerReflectionRequest) *rpbv
 
 	case *rpbv1.ServerReflectionRequest_FileByFilename:
 		name := v.FileByFilename
-		if name == s.filename {
-			b, err := marshalFD(s.filteredFD)
+		if fd, ok := s.nameToFile[name]; ok {
+			b, err := marshalFD(fd)
 			if err != nil {
 				return errorResponse(err.Error())
 			}
 			return fileDescriptorResponse(b)
 		}
-		fd, err := protoregistry.GlobalFiles.FindFileByPath(name)
+		gfd, err := protoregistry.GlobalFiles.FindFileByPath(name)
 		if err != nil {
 			return errorResponse(err.Error())
 		}
-		resp, err := globalFileLookup(fd)
+		resp, err := globalFileLookup(gfd)
 		if err != nil {
 			return errorResponse(err.Error())
 		}
@@ -208,8 +232,8 @@ func (s *filteredServer) handleRequest(req *rpbv1.ServerReflectionRequest) *rpbv
 
 	case *rpbv1.ServerReflectionRequest_FileContainingSymbol:
 		symbol := v.FileContainingSymbol
-		if s.filteredSymbols[symbol] {
-			b, err := marshalFD(s.filteredFD)
+		if fd, ok := s.symbolToFile[symbol]; ok {
+			b, err := marshalFD(fd)
 			if err != nil {
 				return errorResponse(err.Error())
 			}

@@ -41,12 +41,16 @@ plugins:
     opt: paths=source_relative
 ```
 
-### 4. Use RegisterFilteredReflection
+### 4. Register filtered reflection
 
 In your server setup, replace `reflection.Register(s)` with:
 
 ```go
-playerv1.RegisterFilteredReflection(grpcServer)
+import fieldops "github.com/lfreixial/proto-opscope/pkg/fieldops"
+
+// Filtered descriptors are auto-registered via init() in generated code.
+// Just call Register once in your server setup.
+fieldops.Register(grpcServer)
 ```
 
 ## Operation Values

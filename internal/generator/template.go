@@ -6,10 +6,7 @@ var generatedFileTemplate = template.Must(template.New("fieldops").Parse(`// Cod
 
 package {{.PackageName}}
 
-import (
-	"google.golang.org/grpc"
-	fieldops "github.com/lfreixial/proto-opscope/pkg/fieldops"
-)
+import fieldops "github.com/lfreixial/proto-opscope/pkg/fieldops"
 
 // filteredFileDescriptor contains the pre-computed filtered file descriptor
 // with synthetic message types for operation-scoped gRPC reflection.
@@ -17,10 +14,7 @@ var filteredFileDescriptor = []byte{
 	{{.DescBytesLiteral}}
 }
 
-// RegisterFilteredReflection registers a gRPC reflection server that shows
-// only the fields relevant to each RPC's operation (CREATE, READ, UPDATE, DELETE).
-// Use this instead of reflection.Register(s) in your server setup.
-func RegisterFilteredReflection(s *grpc.Server) {
-	fieldops.Register(s, filteredFileDescriptor)
+func init() {
+	fieldops.AddDescriptor(filteredFileDescriptor)
 }
 `))

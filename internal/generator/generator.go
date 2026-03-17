@@ -54,10 +54,6 @@ type methodRule struct {
 	SyntheticName string
 }
 
-func (r methodRule) FullMethodName() string {
-	return "/" + r.ServiceFQN + "/" + r.MethodName
-}
-
 // Generate is the entry point for the protoc plugin.
 func Generate(gen *protogen.Plugin) error {
 	for _, f := range gen.Files {
@@ -81,6 +77,9 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 				continue
 			}
 			allowedFields := getFieldsForOp(method.Input, op)
+			if len(allowedFields) == 0 {
+				continue // no field_op annotations → keep original input type
+			}
 			inputShortName := string(method.Input.Desc.Name())
 			rule := methodRule{
 				ServiceFQN:    string(svc.Desc.FullName()),

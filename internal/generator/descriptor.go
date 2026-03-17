@@ -56,7 +56,9 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule) (*descript
 			for _, fi := range allowedFields {
 				for _, origField := range origMsg.GetField() {
 					if origField.GetNumber() == fi.Number {
-						synthetic.Field = append(synthetic.Field, proto.Clone(origField).(*descriptorpb.FieldDescriptorProto))
+						cloned := proto.Clone(origField).(*descriptorpb.FieldDescriptorProto)
+						cloned.Options = nil // strip field_op annotations from synthetic fields
+						synthetic.Field = append(synthetic.Field, cloned)
 						break
 					}
 				}
@@ -64,6 +66,9 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule) (*descript
 		}
 		orig.MessageType = append(orig.MessageType, synthetic)
 	}
+
+	// Strip source code info — unnecessary for reflection and bloats the descriptor.
+	orig.SourceCodeInfo = nil
 
 	return orig, nil
 }
