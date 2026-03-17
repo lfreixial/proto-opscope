@@ -4,10 +4,20 @@
 
 ## Quick Start
 
-### 1. Install the plugin
+### 1. Add the proto dependency
+
+In your project's `buf.yaml`, add proto-opscope as a dependency so the `fieldops/v1/options.proto` import resolves:
+
+```yaml
+version: v2
+deps:
+  - buf.build/proto-opscope/proto-opscope
+```
+
+Then run:
 
 ```bash
-go install github.com/lfreixial/proto-opscope/cmd/protoc-gen-fieldops@latest
+buf dep update
 ```
 
 ### 2. Annotate your proto
@@ -32,6 +42,22 @@ service PlayerService {
 ```
 
 ### 3. Add to buf.gen.yaml
+
+No install step needed — use `go run` to invoke the plugin directly:
+
+```yaml
+version: v2
+plugins:
+  - local: ["go", "run", "github.com/lfreixial/proto-opscope/cmd/protoc-gen-fieldops@latest"]
+    out: gen
+    opt: paths=source_relative
+```
+
+Or, if you prefer to install the binary first:
+
+```bash
+go install github.com/lfreixial/proto-opscope/cmd/protoc-gen-fieldops@latest
+```
 
 ```yaml
 version: v2

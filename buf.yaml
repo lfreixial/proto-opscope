@@ -1,6 +1,7 @@
 version: v2
 modules:
   - path: proto
+    name: buf.build/proto-opscope/proto-opscope
 deps:
   - buf.build/googleapis/googleapis
 lint:
