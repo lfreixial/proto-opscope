@@ -4,7 +4,7 @@ package example.player.v1;
 
 import "fieldops/v1/options.proto";
 
-option go_package = "github.com/lfreixial/proto-opscope/example/gen/example/player/v1;playerv1";
+option go_package = "github.com/lfreixial/proto-opscope/gen/example/player/v1;playerv1";
 
 message Player {
   string id      = 1 [(fieldops.v1.field_op) = OPERATION_READ];

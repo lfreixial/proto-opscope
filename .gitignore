@@ -1,0 +1,22 @@
+# Binaries
+bin/
+*.exe
+
+# Go
+*.test
+*.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Temp
+*~
+*.tmp
+*.bak
