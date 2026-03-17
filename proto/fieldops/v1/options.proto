@@ -1,0 +1,28 @@
+syntax = "proto2";
+
+package fieldops.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/lfreixial/proto-opscope/gen/fieldops/v1;fieldopsv1";
+
+// Operation represents the type of operation an RPC endpoint performs.
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_CREATE = 1;
+  OPERATION_READ = 2;
+  OPERATION_UPDATE = 3;
+  OPERATION_DELETE = 4;
+}
+
+// field_op marks which operations this field is visible in.
+// Add multiple for fields visible in multiple operations.
+extend google.protobuf.FieldOptions {
+  repeated Operation field_op = 51234;
+}
+
+// rpc_op marks which operation this RPC method performs.
+// The filtered reflection server will only show fields matching this operation.
+extend google.protobuf.MethodOptions {
+  optional Operation rpc_op = 51235;
+}

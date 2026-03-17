@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package example.player.v1;
+
+import "fieldops/v1/options.proto";
+
+option go_package = "github.com/lfreixial/proto-opscope/example/gen/example/player/v1;playerv1";
+
+message Player {
+  string id      = 1 [(fieldops.v1.field_op) = OPERATION_READ];
+  string name    = 2 [(fieldops.v1.field_op) = OPERATION_CREATE, (fieldops.v1.field_op) = OPERATION_READ, (fieldops.v1.field_op) = OPERATION_UPDATE];
+  string email   = 3 [(fieldops.v1.field_op) = OPERATION_CREATE, (fieldops.v1.field_op) = OPERATION_READ];
+  string team_id = 4 [(fieldops.v1.field_op) = OPERATION_CREATE];
+  int32  score   = 5 [(fieldops.v1.field_op) = OPERATION_UPDATE, (fieldops.v1.field_op) = OPERATION_READ];
+  string created_at = 6 [(fieldops.v1.field_op) = OPERATION_READ];
+}
+
+message GetPlayerRequest {
+  string id = 1;
+}
+
+service PlayerService {
+  rpc CreatePlayer(Player) returns (Player) {
+    option (fieldops.v1.rpc_op) = OPERATION_CREATE;
+  }
+  rpc UpdatePlayer(Player) returns (Player) {
+    option (fieldops.v1.rpc_op) = OPERATION_UPDATE;
+  }
+  rpc GetPlayer(GetPlayerRequest) returns (Player) {
+    option (fieldops.v1.rpc_op) = OPERATION_READ;
+  }
+}
