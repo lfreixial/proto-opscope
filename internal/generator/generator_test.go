@@ -158,6 +158,9 @@ func TestBuildFilteredDescriptor(t *testing.T) {
 	}
 
 	file := &protogen.File{Proto: fdp}
+	allMessages := map[string]*descriptorpb.DescriptorProto{
+		"test.v1.Player": fdp.GetMessageType()[0],
+	}
 	rules := []methodRule{
 		{
 			ServiceFQN:    "test.v1.PlayerService",
@@ -169,7 +172,7 @@ func TestBuildFilteredDescriptor(t *testing.T) {
 		},
 	}
 
-	result, err := buildFilteredDescriptor(file, rules)
+	result, err := buildFilteredDescriptor(file, rules, allMessages)
 	if err != nil {
 		t.Fatalf("buildFilteredDescriptor() error: %v", err)
 	}
@@ -247,6 +250,9 @@ func TestBuildFilteredDescriptor_OriginalUnmodified(t *testing.T) {
 	}
 
 	file := &protogen.File{Proto: fdp}
+	allMessages := map[string]*descriptorpb.DescriptorProto{
+		"test.v1.Msg": fdp.GetMessageType()[0],
+	}
 	rules := []methodRule{
 		{
 			ServiceFQN:    "test.v1.Svc",
@@ -258,7 +264,7 @@ func TestBuildFilteredDescriptor_OriginalUnmodified(t *testing.T) {
 		},
 	}
 
-	_, err := buildFilteredDescriptor(file, rules)
+	_, err := buildFilteredDescriptor(file, rules, allMessages)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,5 +275,154 @@ func TestBuildFilteredDescriptor_OriginalUnmodified(t *testing.T) {
 	}
 	if fdp.GetService()[0].GetMethod()[0].GetInputType() != ".test.v1.Msg" {
 		t.Error("original method InputType was mutated")
+	}
+}
+
+func TestBuildFilteredDescriptor_CrossFileMessage(t *testing.T) {
+	// Service file does NOT contain the input message — it's in a different file.
+	svcFDP := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("svc.proto"),
+		Package: proto.String("test.v1"),
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("PlayerService"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("CreatePlayer"),
+						InputType:  proto.String(".test.v1.Player"),
+						OutputType: proto.String(".test.v1.Player"),
+					},
+				},
+			},
+		},
+	}
+
+	// The message is defined in a separate file.
+	msgDesc := &descriptorpb.DescriptorProto{
+		Name: proto.String("Player"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{Name: proto.String("id"), Number: proto.Int32(1), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+			{Name: proto.String("name"), Number: proto.Int32(2), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+			{Name: proto.String("email"), Number: proto.Int32(3), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+		},
+	}
+
+	allMessages := map[string]*descriptorpb.DescriptorProto{
+		"test.v1.Player": msgDesc,
+	}
+
+	file := &protogen.File{Proto: svcFDP}
+	rules := []methodRule{
+		{
+			ServiceFQN:    "test.v1.PlayerService",
+			MethodName:    "CreatePlayer",
+			Operation:     OperationCreate,
+			InputFQN:      "test.v1.Player",
+			AllowedFields: []fieldInfo{{Number: 2, Name: "name"}, {Number: 3, Name: "email"}},
+			SyntheticName: "Player_CREATE",
+		},
+	}
+
+	result, err := buildFilteredDescriptor(file, rules, allMessages)
+	if err != nil {
+		t.Fatalf("buildFilteredDescriptor() error: %v", err)
+	}
+
+	// Synthetic message should exist with the correct fields despite the message
+	// being in a different file.
+	var synthetic *descriptorpb.DescriptorProto
+	for _, msg := range result.GetMessageType() {
+		if msg.GetName() == "Player_CREATE" {
+			synthetic = msg
+			break
+		}
+	}
+	if synthetic == nil {
+		t.Fatal("synthetic message Player_CREATE not found")
+	}
+	if len(synthetic.GetField()) != 2 {
+		t.Fatalf("Player_CREATE has %d fields, want 2", len(synthetic.GetField()))
+	}
+	if synthetic.GetField()[0].GetName() != "name" || synthetic.GetField()[1].GetName() != "email" {
+		t.Errorf("fields = [%s, %s], want [name, email]",
+			synthetic.GetField()[0].GetName(), synthetic.GetField()[1].GetName())
+	}
+
+	// Method InputType rewritten to synthetic.
+	method := result.GetService()[0].GetMethod()[0]
+	if method.GetInputType() != ".test.v1.Player_CREATE" {
+		t.Errorf("InputType = %q, want %q", method.GetInputType(), ".test.v1.Player_CREATE")
+	}
+}
+
+func TestBuildFilteredDescriptor_EmptySyntheticForNoMatchingOps(t *testing.T) {
+	// Message has field_op annotations but none match the RPC's operation.
+	// The synthetic should be created with zero fields (not skipped).
+	svcFDP := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test.proto"),
+		Package: proto.String("test.v1"),
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Svc"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("DeleteItem"),
+						InputType:  proto.String(".test.v1.Item"),
+						OutputType: proto.String(".test.v1.Item"),
+					},
+				},
+			},
+		},
+	}
+
+	// Item has field_op annotations for CREATE and READ only — not DELETE.
+	itemDesc := &descriptorpb.DescriptorProto{
+		Name: proto.String("Item"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{Name: proto.String("id"), Number: proto.Int32(1), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+			{Name: proto.String("name"), Number: proto.Int32(2), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+		},
+	}
+
+	allMessages := map[string]*descriptorpb.DescriptorProto{
+		"test.v1.Item": itemDesc,
+	}
+
+	file := &protogen.File{Proto: svcFDP}
+	rules := []methodRule{
+		{
+			ServiceFQN:    "test.v1.Svc",
+			MethodName:    "DeleteItem",
+			Operation:     OperationDelete,
+			InputFQN:      "test.v1.Item",
+			AllowedFields: nil, // no fields match DELETE
+			SyntheticName: "Item_DELETE",
+		},
+	}
+
+	result, err := buildFilteredDescriptor(file, rules, allMessages)
+	if err != nil {
+		t.Fatalf("buildFilteredDescriptor() error: %v", err)
+	}
+
+	// Synthetic should exist with zero fields.
+	var synthetic *descriptorpb.DescriptorProto
+	for _, msg := range result.GetMessageType() {
+		if msg.GetName() == "Item_DELETE" {
+			synthetic = msg
+			break
+		}
+	}
+	if synthetic == nil {
+		t.Fatal("synthetic message Item_DELETE not found — should be created even with no matching fields")
+	}
+	if len(synthetic.GetField()) != 0 {
+		t.Errorf("Item_DELETE has %d fields, want 0", len(synthetic.GetField()))
+	}
+
+	// Method InputType rewritten to synthetic.
+	method := result.GetService()[0].GetMethod()[0]
+	if method.GetInputType() != ".test.v1.Item_DELETE" {
+		t.Errorf("InputType = %q, want %q", method.GetInputType(), ".test.v1.Item_DELETE")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 )
 
 const (
@@ -56,18 +57,35 @@ type methodRule struct {
 
 // Generate is the entry point for the protoc plugin.
 func Generate(gen *protogen.Plugin) error {
+	allMessages := buildMessageMap(gen)
+
 	for _, f := range gen.Files {
 		if !f.Generate {
 			continue
 		}
-		if err := generateFile(gen, f); err != nil {
+		if err := generateFile(gen, f, allMessages); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func generateFile(gen *protogen.Plugin, file *protogen.File) error {
+// buildMessageMap indexes all top-level messages across every file known to the
+// plugin, keyed by fully-qualified name. This allows cross-file resolution when
+// a service's input message is defined in a different proto file.
+func buildMessageMap(gen *protogen.Plugin) map[string]*descriptorpb.DescriptorProto {
+	m := make(map[string]*descriptorpb.DescriptorProto)
+	for _, f := range gen.Files {
+		pkg := f.Proto.GetPackage()
+		for _, msg := range f.Proto.GetMessageType() {
+			fqn := pkg + "." + msg.GetName()
+			m[fqn] = msg
+		}
+	}
+	return m
+}
+
+func generateFile(gen *protogen.Plugin, file *protogen.File, allMessages map[string]*descriptorpb.DescriptorProto) error {
 	var rules []methodRule
 
 	for _, svc := range file.Services {
@@ -77,8 +95,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 				continue
 			}
 			allowedFields := getFieldsForOp(method.Input, op)
-			if len(allowedFields) == 0 {
-				continue // no field_op annotations → keep original input type
+			if len(allowedFields) == 0 && !hasAnyFieldOps(method.Input) {
+				continue // message has no field_op annotations at all → keep original input type
 			}
 			inputShortName := string(method.Input.Desc.Name())
 			rule := methodRule{
@@ -97,7 +115,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 		return nil
 	}
 
-	filteredFD, err := buildFilteredDescriptor(file, rules)
+	filteredFD, err := buildFilteredDescriptor(file, rules, allMessages)
 	if err != nil {
 		return fmt.Errorf("buildFilteredDescriptor: %w", err)
 	}
@@ -221,6 +239,18 @@ func getFieldsForOp(msg *protogen.Message, op Operation) []fieldInfo {
 		}
 	}
 	return fields
+}
+
+// hasAnyFieldOps returns true if any field in the message has at least one
+// field_op annotation, regardless of which operation it specifies.
+func hasAnyFieldOps(msg *protogen.Message) bool {
+	for _, field := range msg.Fields {
+		ops := readFieldOps(field.Desc.Options())
+		if len(ops) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func skipField(b []byte, num protowire.Number, typ protowire.Type) int {

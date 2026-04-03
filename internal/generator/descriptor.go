@@ -10,23 +10,16 @@ import (
 
 // buildFilteredDescriptor clones the file descriptor and adds synthetic message
 // types that contain only the fields allowed for each operation.
-func buildFilteredDescriptor(file *protogen.File, rules []methodRule) (*descriptorpb.FileDescriptorProto, error) {
+// allMessages maps fully-qualified message names to their descriptors across all
+// files, enabling resolution of input messages defined in a different proto file.
+func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessages map[string]*descriptorpb.DescriptorProto) (*descriptorpb.FileDescriptorProto, error) {
 	orig := proto.Clone(file.Proto).(*descriptorpb.FileDescriptorProto)
 
-	// Build map of original messages by short name.
-	origMessages := map[string]*descriptorpb.DescriptorProto{}
-	for _, msg := range orig.GetMessageType() {
-		origMessages[msg.GetName()] = msg
-	}
-
-	type syntheticKey struct{ msgName, op string }
+	type syntheticKey struct{ fqn, op string }
 	synthetics := map[syntheticKey][]fieldInfo{}
 
 	for _, rule := range rules {
-		// Extract short message name from FQN.
-		parts := strings.Split(rule.InputFQN, ".")
-		shortName := parts[len(parts)-1]
-		key := syntheticKey{shortName, rule.Operation.String()}
+		key := syntheticKey{rule.InputFQN, rule.Operation.String()}
 		synthetics[key] = rule.AllowedFields
 	}
 
@@ -48,10 +41,12 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule) (*descript
 
 	// Create synthetic message types.
 	for key, allowedFields := range synthetics {
+		parts := strings.Split(key.fqn, ".")
+		shortName := parts[len(parts)-1]
 		synthetic := &descriptorpb.DescriptorProto{
-			Name: proto.String(key.msgName + "_" + key.op),
+			Name: proto.String(shortName + "_" + key.op),
 		}
-		origMsg := origMessages[key.msgName]
+		origMsg := allMessages[key.fqn]
 		if origMsg != nil {
 			for _, fi := range allowedFields {
 				for _, origField := range origMsg.GetField() {
