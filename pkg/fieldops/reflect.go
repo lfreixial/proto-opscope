@@ -213,8 +213,10 @@ func (s *filteredServer) handleRequest(req *rpbv1.ServerReflectionRequest) *rpbv
 		// Also discover all services registered on the gRPC server so that
 		// non-annotated services still appear in reflection.
 		var svcs []*rpbv1.ServiceResponse
-		for name := range s.grpcServer.GetServiceInfo() {
-			svcs = append(svcs, &rpbv1.ServiceResponse{Name: name})
+		if s.grpcServer != nil {
+			for name := range s.grpcServer.GetServiceInfo() {
+				svcs = append(svcs, &rpbv1.ServiceResponse{Name: name})
+			}
 		}
 		// Add any filtered services not already in the gRPC service info
 		// (shouldn't happen, but be safe).
@@ -341,3 +343,4 @@ func errorResponse(msg string) *rpbv1.ServerReflectionResponse {
 		},
 	}
 }
+
