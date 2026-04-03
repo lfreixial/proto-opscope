@@ -10,12 +10,12 @@ import (
 
 // buildFilteredDescriptor clones the file descriptor and adds synthetic message
 // types that contain only the fields allowed for each operation.
-// allMessages maps fully-qualified message names to their descriptors across all
-// files, enabling resolution of input messages defined in a different proto file.
+// allMessages is a cross-file map keyed by fully-qualified name
+// (e.g. "dpprotos.services.entities.users.v1.UserInformation") built by buildAllMessages.
 func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessages map[string]*descriptorpb.DescriptorProto) (*descriptorpb.FileDescriptorProto, error) {
 	orig := proto.Clone(file.Proto).(*descriptorpb.FileDescriptorProto)
 
-	type syntheticKey struct{ fqn, op string }
+	type syntheticKey struct{ msgFQN, op string }
 	synthetics := map[syntheticKey][]fieldInfo{}
 
 	for _, rule := range rules {
@@ -41,12 +41,12 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 
 	// Create synthetic message types.
 	for key, allowedFields := range synthetics {
-		parts := strings.Split(key.fqn, ".")
+		parts := strings.Split(key.msgFQN, ".")
 		shortName := parts[len(parts)-1]
 		synthetic := &descriptorpb.DescriptorProto{
 			Name: proto.String(shortName + "_" + key.op),
 		}
-		origMsg := allMessages[key.fqn]
+		origMsg := allMessages[key.msgFQN]
 		if origMsg != nil {
 			for _, fi := range allowedFields {
 				for _, origField := range origMsg.GetField() {
