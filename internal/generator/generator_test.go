@@ -169,11 +169,13 @@ func TestBuildFilteredDescriptor(t *testing.T) {
 		},
 	}
 	allMessages := map[string]*descriptorpb.DescriptorProto{}
+	allTypeFiles := map[string]string{}
 	for _, msg := range fdp.GetMessageType() {
 		allMessages[fdp.GetPackage()+"."+msg.GetName()] = msg
+		allTypeFiles[fdp.GetPackage()+"."+msg.GetName()] = fdp.GetName()
 	}
 
-	result, err := buildFilteredDescriptor(file, rules, allMessages)
+	result, err := buildFilteredDescriptor(file, rules, allMessages, allTypeFiles)
 	if err != nil {
 		t.Fatalf("buildFilteredDescriptor() error: %v", err)
 	}
@@ -262,11 +264,13 @@ func TestBuildFilteredDescriptor_OriginalUnmodified(t *testing.T) {
 		},
 	}
 	allMessages := map[string]*descriptorpb.DescriptorProto{}
+	allTypeFiles := map[string]string{}
 	for _, msg := range fdp.GetMessageType() {
 		allMessages[fdp.GetPackage()+"."+msg.GetName()] = msg
+		allTypeFiles[fdp.GetPackage()+"."+msg.GetName()] = fdp.GetName()
 	}
 
-	_, err := buildFilteredDescriptor(file, rules, allMessages)
+	_, err := buildFilteredDescriptor(file, rules, allMessages, allTypeFiles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,4 +283,3 @@ func TestBuildFilteredDescriptor_OriginalUnmodified(t *testing.T) {
 		t.Error("original method InputType was mutated")
 	}
 }
-

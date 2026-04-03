@@ -12,7 +12,7 @@ import (
 // types that contain only the fields allowed for each operation.
 // allMessages is a cross-file map keyed by fully-qualified name
 // (e.g. "dpprotos.services.entities.users.v1.UserInformation") built by buildAllMessages.
-func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessages map[string]*descriptorpb.DescriptorProto) (*descriptorpb.FileDescriptorProto, error) {
+func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessages map[string]*descriptorpb.DescriptorProto, allTypeFiles map[string]string) (*descriptorpb.FileDescriptorProto, error) {
 	orig := proto.Clone(file.Proto).(*descriptorpb.FileDescriptorProto)
 	pkg := orig.GetPackage()
 
@@ -93,6 +93,27 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 					m.InputType = proto.String(newType)
 					break
 				}
+			}
+		}
+	}
+
+	// Proto requires every referenced type to be in a directly-imported file;
+	// transitive imports are not sufficient. Scan all messages (including the
+	// newly created synthetics) and add any missing direct dependencies.
+	existingDeps := make(map[string]bool)
+	for _, dep := range orig.GetDependency() {
+		existingDeps[dep] = true
+	}
+	for _, msg := range orig.GetMessageType() {
+		for _, field := range msg.GetField() {
+			if field.GetType() != descriptorpb.FieldDescriptorProto_TYPE_MESSAGE &&
+				field.GetType() != descriptorpb.FieldDescriptorProto_TYPE_ENUM {
+				continue
+			}
+			typeFQN := strings.TrimPrefix(field.GetTypeName(), ".")
+			if sourceFile, ok := allTypeFiles[typeFQN]; ok && !existingDeps[sourceFile] {
+				orig.Dependency = append(orig.Dependency, sourceFile)
+				existingDeps[sourceFile] = true
 			}
 		}
 	}
