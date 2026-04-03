@@ -14,24 +14,82 @@ import (
 // (e.g. "dpprotos.services.entities.users.v1.UserInformation") built by buildAllMessages.
 func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessages map[string]*descriptorpb.DescriptorProto) (*descriptorpb.FileDescriptorProto, error) {
 	orig := proto.Clone(file.Proto).(*descriptorpb.FileDescriptorProto)
+	pkg := orig.GetPackage()
 
+	// created tracks synthetic names already added to avoid duplicates/cycles.
+	created := map[string]bool{}
+
+	// addSynthetic recursively creates a synthetic message for msgFQN scoped to op,
+	// appending it (and any sub-synthetics) to orig.MessageType.
+	// Returns the short synthetic name (e.g. "UserInformation_UPDATE").
+	var addSynthetic func(msgFQN, op string) string
+	addSynthetic = func(msgFQN, op string) string {
+		parts := strings.Split(msgFQN, ".")
+		shortName := parts[len(parts)-1]
+		syntheticName := shortName + "_" + op
+
+		if created[syntheticName] {
+			return syntheticName
+		}
+		created[syntheticName] = true
+
+		origMsg := allMessages[msgFQN]
+		synthetic := &descriptorpb.DescriptorProto{
+			Name: proto.String(syntheticName),
+		}
+
+		if origMsg != nil {
+			allowedFields := getFieldsForOpRaw(origMsg, op)
+			for _, fi := range allowedFields {
+				for _, origField := range origMsg.GetField() {
+					if origField.GetNumber() != fi.Number {
+						continue
+					}
+					cloned := proto.Clone(origField).(*descriptorpb.FieldDescriptorProto)
+					cloned.Options = nil
+
+					// If this field is a message type, check whether the sub-message
+					// has any field_op annotations for this operation. If so, create
+					// a filtered sub-synthetic and rewrite the type reference.
+					if cloned.GetType() == descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
+						subTypeName := cloned.GetTypeName() // e.g. ".pkg.UserInformation"
+						subFQN := strings.TrimPrefix(subTypeName, ".")
+						subMsg := allMessages[subFQN]
+						if subMsg != nil && len(getFieldsForOpRaw(subMsg, op)) > 0 {
+							subSyntheticName := addSynthetic(subFQN, op)
+							cloned.TypeName = proto.String("." + pkg + "." + subSyntheticName)
+						}
+					}
+
+					synthetic.Field = append(synthetic.Field, cloned)
+					break
+				}
+			}
+		}
+
+		orig.MessageType = append(orig.MessageType, synthetic)
+		return syntheticName
+	}
+
+	// Update method InputType in cloned services and build top-level synthetics.
 	type syntheticKey struct{ msgFQN, op string }
-	synthetics := map[syntheticKey][]fieldInfo{}
+	topLevel := map[syntheticKey]string{} // key → syntheticName
 
 	for _, rule := range rules {
 		key := syntheticKey{rule.InputFQN, rule.Operation.String()}
-		synthetics[key] = rule.AllowedFields
+		if _, already := topLevel[key]; !already {
+			syntheticName := addSynthetic(rule.InputFQN, rule.Operation.String())
+			topLevel[key] = syntheticName
+		}
 	}
 
-	// Update method InputType in cloned services.
 	for _, svc := range orig.GetService() {
 		for _, m := range svc.GetMethod() {
 			for _, rule := range rules {
-				// Match by short service name and method name.
 				svcParts := strings.Split(rule.ServiceFQN, ".")
 				shortSvcName := svcParts[len(svcParts)-1]
 				if svc.GetName() == shortSvcName && m.GetName() == rule.MethodName {
-					newType := "." + orig.GetPackage() + "." + rule.SyntheticName
+					newType := "." + pkg + "." + rule.SyntheticName
 					m.InputType = proto.String(newType)
 					break
 				}
@@ -39,31 +97,47 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 		}
 	}
 
-	// Create synthetic message types.
-	for key, allowedFields := range synthetics {
-		parts := strings.Split(key.msgFQN, ".")
-		shortName := parts[len(parts)-1]
-		synthetic := &descriptorpb.DescriptorProto{
-			Name: proto.String(shortName + "_" + key.op),
-		}
-		origMsg := allMessages[key.msgFQN]
-		if origMsg != nil {
-			for _, fi := range allowedFields {
-				for _, origField := range origMsg.GetField() {
-					if origField.GetNumber() == fi.Number {
-						cloned := proto.Clone(origField).(*descriptorpb.FieldDescriptorProto)
-						cloned.Options = nil // strip field_op annotations from synthetic fields
-						synthetic.Field = append(synthetic.Field, cloned)
-						break
-					}
-				}
-			}
-		}
-		orig.MessageType = append(orig.MessageType, synthetic)
-	}
-
 	// Strip source code info — unnecessary for reflection and bloats the descriptor.
 	orig.SourceCodeInfo = nil
 
 	return orig, nil
 }
+
+// getFieldsForOpRaw returns the fields of a raw DescriptorProto that are annotated
+// with the given operation string (e.g. "UPDATE").
+func getFieldsForOpRaw(msg *descriptorpb.DescriptorProto, op string) []fieldInfo {
+	target := parseOpString(op)
+	if target == OperationUnspecified {
+		return nil
+	}
+	var fields []fieldInfo
+	for _, field := range msg.GetField() {
+		ops := readFieldOps(field.GetOptions())
+		for _, o := range ops {
+			if o == target {
+				fields = append(fields, fieldInfo{
+					Number: field.GetNumber(),
+					Name:   field.GetName(),
+				})
+				break
+			}
+		}
+	}
+	return fields
+}
+
+func parseOpString(op string) Operation {
+	switch op {
+	case "CREATE":
+		return OperationCreate
+	case "READ":
+		return OperationRead
+	case "UPDATE":
+		return OperationUpdate
+	case "DELETE":
+		return OperationDelete
+	default:
+		return OperationUnspecified
+	}
+}
+
