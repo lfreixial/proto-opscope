@@ -40,6 +40,10 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 
 		if origMsg != nil {
 			allowedFields := getFieldsForOpRaw(origMsg, op)
+			// oneofIndexMap remaps original oneof_decl indices to synthetic indices.
+			// Proto3 optional fields use synthetic oneofs; without this, cloned
+			// fields would have oneof_index values pointing to non-existent entries.
+			oneofIndexMap := map[int32]int32{}
 			for _, fi := range allowedFields {
 				for _, origField := range origMsg.GetField() {
 					if origField.GetNumber() != fi.Number {
@@ -47,6 +51,22 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 					}
 					cloned := proto.Clone(origField).(*descriptorpb.FieldDescriptorProto)
 					cloned.Options = nil
+
+					// Remap oneof_index: copy the referenced oneof_decl entry into
+					// the synthetic message and update the index accordingly.
+					if cloned.OneofIndex != nil {
+						origOneofIdx := cloned.GetOneofIndex()
+						if newIdx, ok := oneofIndexMap[origOneofIdx]; ok {
+							cloned.OneofIndex = proto.Int32(newIdx)
+						} else {
+							origOneof := origMsg.GetOneofDecl()[origOneofIdx]
+							clonedOneof := proto.Clone(origOneof).(*descriptorpb.OneofDescriptorProto)
+							newIdx = int32(len(synthetic.GetOneofDecl()))
+							synthetic.OneofDecl = append(synthetic.OneofDecl, clonedOneof)
+							oneofIndexMap[origOneofIdx] = newIdx
+							cloned.OneofIndex = proto.Int32(newIdx)
+						}
+					}
 
 					// If this field is a message type, check whether the sub-message
 					// has any field_op annotations for this operation. If so, create
