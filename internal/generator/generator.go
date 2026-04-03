@@ -58,11 +58,12 @@ type methodRule struct {
 // Generate is the entry point for the protoc plugin.
 func Generate(gen *protogen.Plugin) error {
 	allMessages := buildAllMessages(gen)
+	allTypeFiles := buildAllTypeFiles(gen)
 	for _, f := range gen.Files {
 		if !f.Generate {
 			continue
 		}
-		if err := generateFile(gen, f, allMessages); err != nil {
+		if err := generateFile(gen, f, allMessages, allTypeFiles); err != nil {
 			return err
 		}
 	}
@@ -84,7 +85,25 @@ func buildAllMessages(gen *protogen.Plugin) map[string]*descriptorpb.DescriptorP
 	return m
 }
 
-func generateFile(gen *protogen.Plugin, file *protogen.File, allMessages map[string]*descriptorpb.DescriptorProto) error {
+// buildAllTypeFiles maps every message and enum FQN to the proto file that defines it.
+// This is used to add missing direct imports when synthetic messages reference types
+// from files not already in the descriptor's dependency list.
+func buildAllTypeFiles(gen *protogen.Plugin) map[string]string {
+	m := make(map[string]string)
+	for _, f := range gen.Files {
+		pkg := f.Proto.GetPackage()
+		name := f.Proto.GetName()
+		for _, msg := range f.Proto.GetMessageType() {
+			m[pkg+"."+msg.GetName()] = name
+		}
+		for _, enum := range f.Proto.GetEnumType() {
+			m[pkg+"."+enum.GetName()] = name
+		}
+	}
+	return m
+}
+
+func generateFile(gen *protogen.Plugin, file *protogen.File, allMessages map[string]*descriptorpb.DescriptorProto, allTypeFiles map[string]string) error {
 	var rules []methodRule
 
 	for _, svc := range file.Services {
@@ -114,7 +133,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, allMessages map[str
 		return nil
 	}
 
-	filteredFD, err := buildFilteredDescriptor(file, rules, allMessages)
+	filteredFD, err := buildFilteredDescriptor(file, rules, allMessages, allTypeFiles)
 	if err != nil {
 		return fmt.Errorf("buildFilteredDescriptor: %w", err)
 	}
@@ -261,4 +280,3 @@ func skipField(b []byte, num protowire.Number, typ protowire.Type) int {
 		return -1
 	}
 }
-
