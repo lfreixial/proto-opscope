@@ -30,19 +30,22 @@ func AddDescriptor(desc []byte) {
 
 // Register creates a filtered reflection server using all descriptors added via
 // AddDescriptor and registers both v1 and v1alpha reflection services.
+// It also discovers all services registered on the gRPC server so that
+// non-annotated services still appear in reflection responses.
 func Register(s *grpc.Server) {
 	registryMu.Lock()
 	raw := make([][]byte, len(registry))
 	copy(raw, registry)
 	registryMu.Unlock()
 
-	srv := &filteredServer{rawDescs: raw}
+	srv := &filteredServer{rawDescs: raw, grpcServer: s}
 	rpbv1.RegisterServerReflectionServer(s, &v1Adapter{srv})
 	rpbv1alpha.RegisterServerReflectionServer(s, &v1alphaAdapter{srv})
 }
 
 type filteredServer struct {
 	rawDescs     [][]byte
+	grpcServer   *grpc.Server
 	once         sync.Once
 	initErr      error
 	files        []*descriptorpb.FileDescriptorProto
@@ -198,11 +201,33 @@ func (s *filteredServer) handleRequest(req *rpbv1.ServerReflectionRequest) *rpbv
 
 	switch v := req.MessageRequest.(type) {
 	case *rpbv1.ServerReflectionRequest_ListServices:
-		var svcs []*rpbv1.ServiceResponse
+		// Collect services from filtered descriptors (these have our synthetic types).
+		filteredServices := make(map[string]bool)
 		for _, fd := range s.files {
 			pkg := fd.GetPackage()
 			for _, svc := range fd.GetService() {
-				svcs = append(svcs, &rpbv1.ServiceResponse{Name: pkg + "." + svc.GetName()})
+				filteredServices[pkg+"."+svc.GetName()] = true
+			}
+		}
+
+		// Also discover all services registered on the gRPC server so that
+		// non-annotated services still appear in reflection.
+		var svcs []*rpbv1.ServiceResponse
+		for name := range s.grpcServer.GetServiceInfo() {
+			svcs = append(svcs, &rpbv1.ServiceResponse{Name: name})
+		}
+		// Add any filtered services not already in the gRPC service info
+		// (shouldn't happen, but be safe).
+		for name := range filteredServices {
+			found := false
+			for _, svc := range svcs {
+				if svc.Name == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				svcs = append(svcs, &rpbv1.ServiceResponse{Name: name})
 			}
 		}
 		return &rpbv1.ServerReflectionResponse{
