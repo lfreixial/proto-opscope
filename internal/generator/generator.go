@@ -113,8 +113,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, allMessages map[str
 				continue
 			}
 			allowedFields := getFieldsForOp(method.Input, op)
-			if len(allowedFields) == 0 {
-				continue // no field_op annotations → keep original input type
+			if len(allowedFields) == 0 && !hasAnyFieldOps(method.Input) {
+				continue // message has no field_op annotations at all → keep original input type
 			}
 			inputShortName := string(method.Input.Desc.Name())
 			rule := methodRule{
@@ -257,6 +257,18 @@ func getFieldsForOp(msg *protogen.Message, op Operation) []fieldInfo {
 		}
 	}
 	return fields
+}
+
+// hasAnyFieldOps returns true if any field in the message has at least one
+// field_op annotation, regardless of which operation it specifies.
+func hasAnyFieldOps(msg *protogen.Message) bool {
+	for _, field := range msg.Fields {
+		ops := readFieldOps(field.Desc.Options())
+		if len(ops) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func skipField(b []byte, num protowire.Number, typ protowire.Type) int {
