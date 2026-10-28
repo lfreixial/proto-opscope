@@ -68,3 +68,14 @@ jobs:
           NEXT: ${{ steps.version.outputs.next }}
         working-directory: ${{ runner.temp }} # outside the repo so it isn't the main module
         run: GOPROXY=https://proxy.golang.org go list -m "github.com/${GITHUB_REPOSITORY}@${NEXT}"
+      # The tag was created on GitHub; fetch it so buf push --git-metadata
+      # (used by buf-action) labels the BSR commit with the version.
+      - name: Fetch release tag
+        if: ${{ !inputs.dry_run }}
+        run: git fetch --tags --force origin
+      - name: Push protos to BSR with version label
+        if: ${{ !inputs.dry_run }}
+        uses: bufbuild/buf-action@v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          push: true # defaults to false outside push events
