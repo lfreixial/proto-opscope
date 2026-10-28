@@ -1,7 +1,9 @@
 version: v2
 modules:
   - path: proto
-    name: buf.build/lfreixial/proto-opscope
+    # BSR only allows organization-owned modules on buf.build, so this stays
+    # under the proto-opscope org rather than the lfreixial user.
+    name: buf.build/proto-opscope/proto-opscope
   # Example protos for the demo server. Unnamed, so they aren't pushed to the BSR
   # (buf-action pushes with --exclude-unnamed).
   - path: example/proto
