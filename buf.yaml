@@ -2,6 +2,9 @@ version: v2
 modules:
   - path: proto
     name: buf.build/proto-opscope/proto-opscope
+  # Example protos for the demo server. Unnamed, so they aren't pushed to the BSR
+  # (buf-action pushes with --exclude-unnamed).
+  - path: example/proto
 lint:
   use:
     - STANDARD
