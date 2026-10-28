@@ -79,3 +79,4 @@ jobs:
         with:
           token: ${{ secrets.BUF_TOKEN }}
           push: true # defaults to false outside push events
+          push_create_visibility: public # --create defaults to private
