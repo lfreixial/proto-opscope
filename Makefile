@@ -1,4 +1,4 @@
-.PHONY: all build install gen-options test lint
+.PHONY: all build install generate test lint run
 
 BINARY = protoc-gen-fieldops
 CMD    = ./cmd/protoc-gen-fieldops
@@ -11,7 +11,7 @@ build:
 install:
 	go install $(CMD)
 
-gen-options:
+generate: build
 	buf generate
 
 test:
@@ -19,3 +19,6 @@ test:
 
 lint:
 	go vet ./...
+
+run:
+	go run ./example/server/main.go

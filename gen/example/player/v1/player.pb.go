@@ -150,6 +150,103 @@ func (x *GetPlayerRequest) GetId() string {
 	return ""
 }
 
+// No field_op or rpc_op annotations — ListPlayers appears in reflection unfiltered.
+type ListPlayersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TeamId        string                 `protobuf:"bytes,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlayersRequest) Reset() {
+	*x = ListPlayersRequest{}
+	mi := &file_example_player_v1_player_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlayersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlayersRequest) ProtoMessage() {}
+
+func (x *ListPlayersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_example_player_v1_player_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlayersRequest.ProtoReflect.Descriptor instead.
+func (*ListPlayersRequest) Descriptor() ([]byte, []int) {
+	return file_example_player_v1_player_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListPlayersRequest) GetTeamId() string {
+	if x != nil {
+		return x.TeamId
+	}
+	return ""
+}
+
+func (x *ListPlayersRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ListPlayersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Players       []*Player              `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlayersResponse) Reset() {
+	*x = ListPlayersResponse{}
+	mi := &file_example_player_v1_player_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlayersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlayersResponse) ProtoMessage() {}
+
+func (x *ListPlayersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_example_player_v1_player_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlayersResponse.ProtoReflect.Descriptor instead.
+func (*ListPlayersResponse) Descriptor() ([]byte, []int) {
+	return file_example_player_v1_player_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListPlayersResponse) GetPlayers() []*Player {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
 var File_example_player_v1_player_proto protoreflect.FileDescriptor
 
 const file_example_player_v1_player_proto_rawDesc = "" +
@@ -164,11 +261,17 @@ const file_example_player_v1_player_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\tB\x04\x90\x82\x19\x02R\tcreatedAt\"\"\n" +
 	"\x10GetPlayerRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id2\xfa\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"C\n" +
+	"\x12ListPlayersRequest\x12\x17\n" +
+	"\ateam_id\x18\x01 \x01(\tR\x06teamId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"J\n" +
+	"\x13ListPlayersResponse\x123\n" +
+	"\aplayers\x18\x01 \x03(\v2\x19.example.player.v1.PlayerR\aplayers2\xd8\x02\n" +
 	"\rPlayerService\x12J\n" +
 	"\fCreatePlayer\x12\x19.example.player.v1.Player\x1a\x19.example.player.v1.Player\"\x04\x98\x82\x19\x01\x12J\n" +
 	"\fUpdatePlayer\x12\x19.example.player.v1.Player\x1a\x19.example.player.v1.Player\"\x04\x98\x82\x19\x03\x12Q\n" +
-	"\tGetPlayer\x12#.example.player.v1.GetPlayerRequest\x1a\x19.example.player.v1.Player\"\x04\x98\x82\x19\x02BCZAgithub.com/lfreixial/proto-opscope/gen/example/player/v1;playerv1b\x06proto3"
+	"\tGetPlayer\x12#.example.player.v1.GetPlayerRequest\x1a\x19.example.player.v1.Player\"\x04\x98\x82\x19\x02\x12\\\n" +
+	"\vListPlayers\x12%.example.player.v1.ListPlayersRequest\x1a&.example.player.v1.ListPlayersResponseBCZAgithub.com/lfreixial/proto-opscope/gen/example/player/v1;playerv1b\x06proto3"
 
 var (
 	file_example_player_v1_player_proto_rawDescOnce sync.Once
@@ -182,23 +285,28 @@ func file_example_player_v1_player_proto_rawDescGZIP() []byte {
 	return file_example_player_v1_player_proto_rawDescData
 }
 
-var file_example_player_v1_player_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_example_player_v1_player_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_example_player_v1_player_proto_goTypes = []any{
-	(*Player)(nil),           // 0: example.player.v1.Player
-	(*GetPlayerRequest)(nil), // 1: example.player.v1.GetPlayerRequest
+	(*Player)(nil),              // 0: example.player.v1.Player
+	(*GetPlayerRequest)(nil),    // 1: example.player.v1.GetPlayerRequest
+	(*ListPlayersRequest)(nil),  // 2: example.player.v1.ListPlayersRequest
+	(*ListPlayersResponse)(nil), // 3: example.player.v1.ListPlayersResponse
 }
 var file_example_player_v1_player_proto_depIdxs = []int32{
-	0, // 0: example.player.v1.PlayerService.CreatePlayer:input_type -> example.player.v1.Player
-	0, // 1: example.player.v1.PlayerService.UpdatePlayer:input_type -> example.player.v1.Player
-	1, // 2: example.player.v1.PlayerService.GetPlayer:input_type -> example.player.v1.GetPlayerRequest
-	0, // 3: example.player.v1.PlayerService.CreatePlayer:output_type -> example.player.v1.Player
-	0, // 4: example.player.v1.PlayerService.UpdatePlayer:output_type -> example.player.v1.Player
-	0, // 5: example.player.v1.PlayerService.GetPlayer:output_type -> example.player.v1.Player
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: example.player.v1.ListPlayersResponse.players:type_name -> example.player.v1.Player
+	0, // 1: example.player.v1.PlayerService.CreatePlayer:input_type -> example.player.v1.Player
+	0, // 2: example.player.v1.PlayerService.UpdatePlayer:input_type -> example.player.v1.Player
+	1, // 3: example.player.v1.PlayerService.GetPlayer:input_type -> example.player.v1.GetPlayerRequest
+	2, // 4: example.player.v1.PlayerService.ListPlayers:input_type -> example.player.v1.ListPlayersRequest
+	0, // 5: example.player.v1.PlayerService.CreatePlayer:output_type -> example.player.v1.Player
+	0, // 6: example.player.v1.PlayerService.UpdatePlayer:output_type -> example.player.v1.Player
+	0, // 7: example.player.v1.PlayerService.GetPlayer:output_type -> example.player.v1.Player
+	3, // 8: example.player.v1.PlayerService.ListPlayers:output_type -> example.player.v1.ListPlayersResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_example_player_v1_player_proto_init() }
@@ -212,7 +320,7 @@ func file_example_player_v1_player_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_example_player_v1_player_proto_rawDesc), len(file_example_player_v1_player_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
