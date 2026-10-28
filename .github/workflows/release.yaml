@@ -1,0 +1,81 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      dry_run:
+        description: "Only compute the next version; don't tag or release"
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags to find the latest version
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet and test
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Compute next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          latest=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          latest=${latest:-v0.0.0}
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          next="v${major}.${minor}.${patch}"
+          if git rev-parse -q --verify "refs/tags/$next" >/dev/null; then
+            echo "::error::Tag $next already exists"
+            exit 1
+          fi
+          echo "Latest: $latest → next: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "### Release $next (from $latest, $BUMP bump)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Create tag and release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: gh release create "$NEXT" --target "$GITHUB_SHA" --title "$NEXT" --generate-notes
+      - name: Warm Go module proxy
+        if: ${{ !inputs.dry_run }}
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        working-directory: ${{ runner.temp }} # outside the repo so it isn't the main module
+        run: GOPROXY=https://proxy.golang.org go list -m "github.com/${GITHUB_REPOSITORY}@${NEXT}"
+      # The tag was created on GitHub; fetch it so buf push --git-metadata
+      # (used by buf-action) labels the BSR commit with the version.
+      - name: Fetch release tag
+        if: ${{ !inputs.dry_run }}
+        run: git fetch --tags --force origin
+      - name: Push protos to BSR with version label
+        if: ${{ !inputs.dry_run }}
+        uses: bufbuild/buf-action@v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          push: true # defaults to false outside push events
