@@ -120,7 +120,8 @@ func buildFilteredDescriptor(file *protogen.File, rules []methodRule, allMessage
 	// Proto requires every referenced type to be in a directly-imported file;
 	// transitive imports are not sufficient. Scan all messages (including the
 	// newly created synthetics) and add any missing direct dependencies.
-	existingDeps := make(map[string]bool)
+	// The file itself is seeded so same-file references don't become a self-import.
+	existingDeps := map[string]bool{orig.GetName(): true}
 	for _, dep := range orig.GetDependency() {
 		existingDeps[dep] = true
 	}

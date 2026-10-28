@@ -19,6 +19,16 @@ message GetPlayerRequest {
   string id = 1;
 }
 
+// No field_op or rpc_op annotations — ListPlayers appears in reflection unfiltered.
+message ListPlayersRequest {
+  string team_id = 1;
+  int32  limit   = 2;
+}
+
+message ListPlayersResponse {
+  repeated Player players = 1;
+}
+
 service PlayerService {
   rpc CreatePlayer(Player) returns (Player) {
     option (fieldops.v1.rpc_op) = OPERATION_CREATE;
@@ -29,4 +39,5 @@ service PlayerService {
   rpc GetPlayer(GetPlayerRequest) returns (Player) {
     option (fieldops.v1.rpc_op) = OPERATION_READ;
   }
+  rpc ListPlayers(ListPlayersRequest) returns (ListPlayersResponse);
 }

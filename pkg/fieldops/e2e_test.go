@@ -123,6 +123,7 @@ func TestE2E_ReflectionResolvesAllServices(t *testing.T) {
 		{"example.player.v1.PlayerService", "CreatePlayer", "example.player.v1.Player_CREATE"},
 		{"example.player.v1.PlayerService", "UpdatePlayer", "example.player.v1.Player_UPDATE"},
 		{"example.player.v1.PlayerService", "GetPlayer", "example.player.v1.GetPlayerRequest"},
+		{"example.player.v1.PlayerService", "ListPlayers", "example.player.v1.ListPlayersRequest"},
 		{"example.player.v1.HealthService", "Check", "example.player.v1.HealthCheckRequest"},
 	}
 	for _, tt := range tests {

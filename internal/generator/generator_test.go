@@ -459,3 +459,63 @@ func TestGetFieldsForOpRaw(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildFilteredDescriptor_NoSelfImport(t *testing.T) {
+	// ListResponse references Player from the same file; the filtered
+	// descriptor must not list its own file as a dependency.
+	fdp := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test.proto"),
+		Package: proto.String("test.v1"),
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("Player"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), Options: makeFieldOptions(OperationCreate)},
+				},
+			},
+			{
+				Name: proto.String("ListResponse"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("players"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.v1.Player")},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Svc"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{Name: proto.String("CreatePlayer"), InputType: proto.String(".test.v1.Player"), OutputType: proto.String(".test.v1.Player")},
+				},
+			},
+		},
+	}
+
+	allMessages := map[string]*descriptorpb.DescriptorProto{}
+	allTypeFiles := map[string]string{}
+	for _, msg := range fdp.GetMessageType() {
+		allMessages[fdp.GetPackage()+"."+msg.GetName()] = msg
+		allTypeFiles[fdp.GetPackage()+"."+msg.GetName()] = fdp.GetName()
+	}
+
+	file := &protogen.File{Proto: fdp}
+	rules := []methodRule{
+		{
+			ServiceFQN:    "test.v1.Svc",
+			MethodName:    "CreatePlayer",
+			Operation:     OperationCreate,
+			InputFQN:      "test.v1.Player",
+			AllowedFields: []fieldInfo{{Number: 1, Name: "name"}},
+			SyntheticName: "Player_CREATE",
+		},
+	}
+
+	result, err := buildFilteredDescriptor(file, rules, allMessages, allTypeFiles)
+	if err != nil {
+		t.Fatalf("buildFilteredDescriptor() error: %v", err)
+	}
+	for _, dep := range result.GetDependency() {
+		if dep == fdp.GetName() {
+			t.Fatalf("filtered descriptor imports itself: %v", result.GetDependency())
+		}
+	}
+}
